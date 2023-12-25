@@ -150,7 +150,8 @@ namespace UnityEngine.Rendering.Universal.Internal
 
         private static void CameraSetup(CommandBuffer cmd, PassData data, ref RenderingData renderingData)
         {
-            if (renderingData.cameraData.renderer.useDepthPriming && data.m_IsOpaque && (renderingData.cameraData.renderType == CameraRenderType.Base || renderingData.cameraData.clearDepth))
+            if (renderingData.cameraData.renderer.useDepthPriming && data.m_IsOpaque && 
+                (renderingData.cameraData.renderType == CameraRenderType.Base || renderingData.cameraData.clearDepth))
             {
                 data.m_RenderStateBlock.depthState = new DepthState(false, CompareFunction.Equal);
                 data.m_RenderStateBlock.mask |= RenderStateMask.Depth;
@@ -255,7 +256,7 @@ namespace UnityEngine.Rendering.Universal.Internal
 
         internal void Render(RenderGraph renderGraph, TextureHandle colorTarget, TextureHandle depthTarget, TextureHandle mainShadowsTexture, TextureHandle additionalShadowsTexture, ref RenderingData renderingData)
         {
-            Camera camera = renderingData.cameraData.camera;
+            //Camera camera = renderingData.cameraData.camera;
 
             using (var builder = renderGraph.AddRenderPass<PassData>("Draw Objects Pass", out var passData,
                 m_ProfilingSampler))
