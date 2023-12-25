@@ -99,7 +99,6 @@ namespace UnityEngine.Rendering.Universal
                 for (int i = 0; i < m_ActiveRenderPassQueue.Count; ++i)
                 {
                     var renderPass = m_ActiveRenderPassQueue[i];
-
                     renderPass.renderPassQueueIndex = i;
 
                     bool RPEnabled = IsRenderPassEnabled(renderPass);
@@ -107,9 +106,7 @@ namespace UnityEngine.Rendering.Universal
                         continue;
 
                     var rpDesc = InitializeRenderPassDescriptor(ref cameraData, renderPass);
-
                     Hash128 hash = CreateRenderPassHash(rpDesc, currentHashIndex);
-
                     m_PassIndexToPassHash[i] = hash;
 
                     if (!m_MergeableRenderPassesMap.ContainsKey(hash))
@@ -120,12 +117,9 @@ namespace UnityEngine.Rendering.Universal
                     else if (m_MergeableRenderPassesMap[hash][GetValidPassIndexCount(m_MergeableRenderPassesMap[hash]) - 1] != (i - 1))
                     {
                         // if the passes are not sequential we want to split the current mergeable passes list. So we increment the hashIndex and update the hash
-
                         currentHashIndex++;
                         hash = CreateRenderPassHash(rpDesc, currentHashIndex);
-
                         m_PassIndexToPassHash[i] = hash;
-
                         m_MergeableRenderPassesMap.Add(hash, m_MergeableRenderPassesMapArrays[m_MergeableRenderPassesMap.Count]);
                         m_RenderPassesAttachmentCount.Add(hash, 0);
                     }

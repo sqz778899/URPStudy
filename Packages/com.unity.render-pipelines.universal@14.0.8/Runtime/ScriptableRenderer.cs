@@ -1078,168 +1078,60 @@ namespace UnityEngine.Rendering.Universal
         /// <param name="renderingData">Current render state information.</param>
         public void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
         {
-            // Disable Gizmos when using scene overrides. Gizmos break some effects like Overdraw debug.
-            bool drawGizmos = UniversalRenderPipelineDebugDisplaySettings.Instance.renderingSettings.sceneOverrideMode == DebugSceneOverrideMode.None;
-
             hasReleasedRTs = false;
             m_IsPipelineExecuting = true;
             ref CameraData cameraData = ref renderingData.cameraData;
             Camera camera = cameraData.camera;
 
-            // Let renderer features call their own setup functions when targets are valid
-            if (rendererFeatures.Count != 0 && !renderingData.cameraData.isPreviewCamera)
-                SetupRenderPasses(in renderingData);
-
             CommandBuffer cmd = CommandBufferPool.Get();
-
-            // TODO: move skybox code from C++ to URP in order to remove the call to context.Submit() inside DrawSkyboxPass
-            // Until then, we can't use nested profiling scopes with XR multipass
-            CommandBuffer cmdScope = cmd;
-
-            using (new ProfilingScope(cmdScope, profilingExecute))
+            InternalStartRendering(context, ref renderingData);
+            // 根据renderPassEvent排序
+            SortStable(m_ActiveRenderPassQueue);
+            // 注册各个Pass RT以及各种Buffer之类的。调用的是各个Pass自己的ConfigureTarget
+            foreach (var pass in activeRenderPassQueue)
+                pass.Configure(cmd, cameraData.cameraTargetDescriptor);
+            context.ExecuteCommandBuffer(cmd);
+            cmd.Clear();
+            //.................Setp 1 SetLight..........................
+            using var renderBlocks = new RenderBlocks(m_ActiveRenderPassQueue);
+            SetupLights(context, ref renderingData);
+            //.................Setp 2 Execute BeforeRendering..........................
+            if (renderBlocks.GetLength(RenderPassBlock.BeforeRendering) > 0)
             {
-                InternalStartRendering(context, ref renderingData);
-
-                // Cache the time for after the call to `SetupCameraProperties` and set the time variables in shader
-                // For now we set the time variables per camera, as we plan to remove `SetupCameraProperties`.
-                // Setting the time per frame would take API changes to pass the variable to each camera render.
-                // Once `SetupCameraProperties` is gone, the variable should be set higher in the call-stack.
-#if UNITY_EDITOR
-                float time = Application.isPlaying ? Time.time : Time.realtimeSinceStartup;
-#else
-                float time = Time.time;
-#endif
-                float deltaTime = Time.deltaTime;
-                float smoothDeltaTime = Time.smoothDeltaTime;
-
-                // Initialize Camera Render State
-                ClearRenderingState(cmd);
-                SetShaderTimeValues(cmd, time, deltaTime, smoothDeltaTime);
-                context.ExecuteCommandBuffer(cmd);
-                cmd.Clear();
-                using (new ProfilingScope(null, Profiling.sortRenderPasses))
-                {
-                    // Sort the render pass queue
-                    SortStable(m_ActiveRenderPassQueue);
-
-                }
-
-                using (new ProfilingScope(null, Profiling.RenderPass.configure))
-                {
-                    foreach (var pass in activeRenderPassQueue)
-                        pass.Configure(cmd, cameraData.cameraTargetDescriptor);
-
-                    context.ExecuteCommandBuffer(cmd);
-                    cmd.Clear();
-                }
-
-                SetupNativeRenderPassFrameData(ref cameraData, useRenderPassEnabled);
-
-                using var renderBlocks = new RenderBlocks(m_ActiveRenderPassQueue);
-
-                using (new ProfilingScope(null, Profiling.setupLights))
-                {
-                    SetupLights(context, ref renderingData);
-                }
-
-#if VISUAL_EFFECT_GRAPH_0_0_1_OR_NEWER
-                using (new ProfilingScope(null, Profiling.setupCamera))
-                {
-                    //Camera variables need to be setup for the VFXManager.ProcessCameraCommand to work properly.
-                    //VFXManager.ProcessCameraCommand needs to be called before any rendering (incl. shadows)
-                    SetPerCameraProperties(context, ref cameraData, camera, cmd);
-
-                    //Triggers dispatch per camera, all global parameters should have been setup at this stage.
-                    VFX.VFXManager.ProcessCameraCommand(camera, cmd, new VFX.VFXCameraXRSettings(), renderingData.cullResults);
-
-                    // Force execution of the command buffer, to ensure that it is run before "BeforeRendering", (which renders shadow maps)
-                    // This is needed in 2022.2 because they are using different command buffers, but not in latest versions.
-                    context.ExecuteCommandBuffer(cmd);
-                    cmd.Clear();
-                }
-#endif
-
-                // Before Render Block. This render blocks always execute in mono rendering.
-                // Camera is not setup.
-                // Used to render input textures like shadowmaps.
-                if (renderBlocks.GetLength(RenderPassBlock.BeforeRendering) > 0)
-                {
-                    // TODO: Separate command buffers per pass break the profiling scope order/hierarchy.
-                    // If a single buffer is used and passed as a param to passes,
-                    // put all of the "block" scopes back into the command buffer. (null -> cmd)
-                    using var profScope = new ProfilingScope(null, Profiling.RenderBlock.beforeRendering);
-                    ExecuteBlock(RenderPassBlock.BeforeRendering, in renderBlocks, context, ref renderingData);
-                }
-
-                using (new ProfilingScope(null, Profiling.setupCamera))
-                {
-                    // This is still required because of the following reasons:
-                    // - Camera billboard properties.
-                    // - Camera frustum planes: unity_CameraWorldClipPlanes[6]
-                    // - _ProjectionParams.x logic is deep inside GfxDevice
-                    // NOTE: The only reason we have to call this here and not at the beginning (before shadows)
-                    // is because this need to be called for each eye in multi pass VR.
-                    // The side effect is that this will override some shader properties we already setup and we will have to
-                    // reset them.
-                    SetPerCameraProperties(context, ref cameraData, camera, cmd);
-
-                    // Reset shader time variables as they were overridden in SetupCameraProperties. If we don't do it we might have a mismatch between shadows and main rendering
-                    SetShaderTimeValues(cmd, time, deltaTime, smoothDeltaTime);
-                }
-
-                context.ExecuteCommandBuffer(cmd);
-                cmd.Clear();
-
-      
-
-                // In the opaque and transparent blocks the main rendering executes.
-
-                // Opaque blocks...
-                if (renderBlocks.GetLength(RenderPassBlock.MainRenderingOpaque) > 0)
-                {
-                    // TODO: Separate command buffers per pass break the profiling scope order/hierarchy.
-                    // If a single buffer is used (passed as a param) for passes,
-                    // put all of the "block" scopes back into the command buffer. (i.e. null -> cmd)
-                    using var profScope = new ProfilingScope(null, Profiling.RenderBlock.mainRenderingOpaque);
-                    ExecuteBlock(RenderPassBlock.MainRenderingOpaque, in renderBlocks, context, ref renderingData);
-                }
-
-                // Transparent blocks...
-                if (renderBlocks.GetLength(RenderPassBlock.MainRenderingTransparent) > 0)
-                {
-                    using var profScope = new ProfilingScope(null, Profiling.RenderBlock.mainRenderingTransparent);
-                    ExecuteBlock(RenderPassBlock.MainRenderingTransparent, in renderBlocks, context, ref renderingData);
-                }
-                
-                // Draw Gizmos...
-                if (drawGizmos)
-                {
-                    DrawGizmos(context, camera, GizmoSubset.PreImageEffects, ref renderingData);
-                }
-
-                // In this block after rendering drawing happens, e.g, post processing, video player capture.
-                if (renderBlocks.GetLength(RenderPassBlock.AfterRendering) > 0)
-                {
-                    using var profScope = new ProfilingScope(null, Profiling.RenderBlock.afterRendering);
-                    ExecuteBlock(RenderPassBlock.AfterRendering, in renderBlocks, context, ref renderingData);
-                }
-
-                DrawWireOverlay(context, camera);
-
-                if (drawGizmos)
-                {
-                    DrawGizmos(context, camera, GizmoSubset.PostImageEffects, ref renderingData);
-                }
-
-                InternalFinishRendering(context, cameraData.resolveFinalTarget, renderingData);
-
-                for (int i = 0; i < m_ActiveRenderPassQueue.Count; ++i)
-                {
-                    m_ActiveRenderPassQueue[i].m_ColorAttachmentIndices.Dispose();
-                    m_ActiveRenderPassQueue[i].m_InputAttachmentIndices.Dispose();
-                }
+                using var profScope = new ProfilingScope(null, Profiling.RenderBlock.beforeRendering);
+                ExecuteBlock(RenderPassBlock.BeforeRendering, in renderBlocks, context, ref renderingData);
+            }
+            //.................Setp 3 Set Camera..........................
+            SetPerCameraProperties(context, ref cameraData, camera, cmd);
+            context.ExecuteCommandBuffer(cmd);
+            cmd.Clear();
+            //.................Setp 4 Execute Opaque..........................
+            if (renderBlocks.GetLength(RenderPassBlock.MainRenderingOpaque) > 0)
+            {
+                using var profScope = new ProfilingScope(null, Profiling.RenderBlock.mainRenderingOpaque);
+                ExecuteBlock(RenderPassBlock.MainRenderingOpaque, in renderBlocks, context, ref renderingData);
+            }
+            //.................Setp 4 Execute Transparent..........................
+            if (renderBlocks.GetLength(RenderPassBlock.MainRenderingTransparent) > 0)
+            {
+                using var profScope = new ProfilingScope(null, Profiling.RenderBlock.mainRenderingTransparent);
+                ExecuteBlock(RenderPassBlock.MainRenderingTransparent, in renderBlocks, context, ref renderingData);
+            }
+            //.................Setp 5 Execute AfterRendering..........................
+            if (renderBlocks.GetLength(RenderPassBlock.AfterRendering) > 0)
+            {
+                using var profScope = new ProfilingScope(null, Profiling.RenderBlock.afterRendering);
+                ExecuteBlock(RenderPassBlock.AfterRendering, in renderBlocks, context, ref renderingData);
             }
 
+            InternalFinishRendering(context, cameraData.resolveFinalTarget, renderingData);
+
+            for (int i = 0; i < m_ActiveRenderPassQueue.Count; ++i)
+            {
+                m_ActiveRenderPassQueue[i].m_ColorAttachmentIndices.Dispose();
+                m_ActiveRenderPassQueue[i].m_InputAttachmentIndices.Dispose();
+            }
+            
             context.ExecuteCommandBuffer(cmd);
             CommandBufferPool.Release(cmd);
         }

@@ -94,7 +94,7 @@ namespace UnityEngine.Rendering.Universal.Internal
                 return false;
 
             using var profScope = new ProfilingScope(null, m_ProfilingSetupSampler);
-
+            
             if (!renderingData.shadowData.supportsMainLightShadows)
                 return SetupForEmptyRendering(ref renderingData);
 

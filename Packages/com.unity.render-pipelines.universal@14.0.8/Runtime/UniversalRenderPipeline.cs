@@ -526,17 +526,20 @@ namespace UnityEngine.Rendering.Universal
             var renderer = cameraData.renderer;
             if (renderer == null)
                 return;
-            if (!cameraData.camera.TryGetCullingParameters(false, out var cullingParameters))
+            if (!TryGetCullingParameters(cameraData, out var cullingParameters))
                 return;
 
             ScriptableRenderer.current = renderer;
             
             CommandBuffer cmd = CommandBufferPool.Get();
             renderer.Clear(cameraData.renderType);
+            renderer.SetupCullingParameters(ref cullingParameters, ref cameraData);
             
+            RTHandles.SetReferenceSize(cameraData.cameraTargetDescriptor.width, cameraData.cameraTargetDescriptor.height);
             var cullResults = context.Cull(ref cullingParameters);
             InitializeRenderingData(asset, ref cameraData, ref cullResults, anyPostProcessingEnabled, cmd, out var renderingData);
-                
+            //renderer.AddRenderPasses(ref renderingData);
+            
             renderer.Setup(context, ref renderingData);
             renderer.Execute(context, ref renderingData);
             CommandBufferPool.Release(cmd);
@@ -1000,6 +1003,9 @@ namespace UnityEngine.Rendering.Universal
         {
             using var profScope = new ProfilingScope(null, Profiling.Pipeline.initializeAdditionalCameraData);
             
+            mCameraData.maxShadowDistance = Mathf.Min(asset.shadowDistance, baseCamera.farClipPlane);
+            mCameraData.maxShadowDistance =  mCameraData.maxShadowDistance >= baseCamera.nearClipPlane ?  mCameraData.maxShadowDistance : 0.0f;
+            
             mCameraData.renderType = baseCameraAdditionalData.renderType;
             mCameraData.clearDepth = (baseCameraAdditionalData.renderType != CameraRenderType.Base) ? baseCameraAdditionalData.clearDepth : true;
             mCameraData.postProcessEnabled = baseCameraAdditionalData.renderPostProcessing;
@@ -1098,6 +1104,7 @@ namespace UnityEngine.Rendering.Universal
             shadowData.resolution = m_ShadowResolutionData;
             shadowData.mainLightShadowsEnabled = settings.supportsMainLightShadows && settings.mainLightRenderingMode == LightRenderingMode.PerPixel;
             shadowData.supportsMainLightShadows = SystemInfo.supportsShadows && shadowData.mainLightShadowsEnabled && mainLightCastShadows;
+           
 
             // We no longer use screen space shadows in URP.
             // This change allows us to have particles & transparent objects receive shadows.

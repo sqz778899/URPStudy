@@ -509,7 +509,7 @@ namespace UnityEngine.Rendering.Universal
             Camera camera = cameraData.camera;
             RenderTextureDescriptor cameraTargetDescriptor = cameraData.cameraTargetDescriptor;
             CommandBuffer cmd = renderingData.commandBuffer;
-
+            
             // TODO: We could cache and generate the LUT before rendering the stack
             bool isSceneViewOrPreviewCamera = cameraData.isSceneViewCamera || cameraData.cameraType == CameraType.Preview;
             if (isSceneViewOrPreviewCamera)
@@ -587,14 +587,6 @@ namespace UnityEngine.Rendering.Universal
         public override void SetupCullingParameters(ref ScriptableCullingParameters cullingParameters,
             ref CameraData cameraData)
         {
-            // TODO: PerObjectCulling also affect reflection probes. Enabling it for now.
-            // if (asset.additionalLightsRenderingMode == LightRenderingMode.Disabled ||
-            //     asset.maxAdditionalLightsCount == 0)
-            if (renderingModeActual == RenderingMode.ForwardPlus)
-            {
-                cullingParameters.cullingOptions |= CullingOptions.DisablePerObjectCulling;
-            }
-
             // We disable shadow casters if both shadow casting modes are turned off
             // or the shadow distance has been turned down to zero
             bool isShadowCastingDisabled = !UniversalRenderPipeline.asset.supportsMainLightShadows && !UniversalRenderPipeline.asset.supportsAdditionalLightShadows;
@@ -604,17 +596,7 @@ namespace UnityEngine.Rendering.Universal
                 cullingParameters.cullingOptions &= ~CullingOptions.ShadowCasters;
             }
 
-            if (this.renderingModeActual == RenderingMode.Deferred)
-                cullingParameters.maximumVisibleLights = 0xFFFF;
-            else
-            {
-                // We set the number of maximum visible lights allowed and we add one for the mainlight...
-                //
-                // Note: However ScriptableRenderContext.Cull() does not differentiate between light types.
-                //       If there is no active main light in the scene, ScriptableRenderContext.Cull() might return  ( cullingParameters.maximumVisibleLights )  visible additional lights.
-                //       i.e ScriptableRenderContext.Cull() might return  ( UniversalRenderPipeline.maxVisibleAdditionalLights + 1 )  visible additional lights !
-                cullingParameters.maximumVisibleLights = UniversalRenderPipeline.maxVisibleAdditionalLights + 1;
-            }
+            cullingParameters.maximumVisibleLights = UniversalRenderPipeline.maxVisibleAdditionalLights + 1;
             cullingParameters.shadowDistance = cameraData.maxShadowDistance;
 
             cullingParameters.conservativeEnclosingSphere = UniversalRenderPipeline.asset.conservativeEnclosingSphere;
