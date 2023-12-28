@@ -1123,9 +1123,9 @@ namespace UnityEngine.Rendering.Universal
                 using var profScope = new ProfilingScope(null, Profiling.RenderBlock.afterRendering);
                 ExecuteBlock(RenderPassBlock.AfterRendering, in renderBlocks, context, ref renderingData);
             }
-
+            //.................Setp 6 Finish Rendering................................
             InternalFinishRendering(context, cameraData.resolveFinalTarget, renderingData);
-
+            
             for (int i = 0; i < m_ActiveRenderPassQueue.Count; ++i)
             {
                 m_ActiveRenderPassQueue[i].m_ColorAttachmentIndices.Dispose();
