@@ -1031,9 +1031,7 @@ namespace UnityEngine.Rendering.Universal
             bool anyPostProcessingEnabled, CommandBuffer cmd, out RenderingData renderingData)
         {
             using var profScope = new ProfilingScope(null, Profiling.Pipeline.initializeRenderingData);
-
-           
-            var visibleLights = cullResults.visibleLights;
+            NativeArray<VisibleLight> visibleLights = cullResults.visibleLights;
 
             int mainLightIndex = GetMainLightIndex(settings, visibleLights);
             bool mainLightCastShadows = false;

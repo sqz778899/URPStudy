@@ -166,37 +166,13 @@ namespace UnityEngine.Rendering.Universal.Internal
             var cmd = renderingData.commandBuffer;
             using (new ProfilingScope(null, m_ProfilingSampler))
             {
-                if (m_UseForwardPlus)
-                {
-                    m_ReflectionProbeManager.UpdateGpuData(cmd, ref renderingData);
-
-                    using (new ProfilingScope(null, m_ProfilingSamplerFPComplete))
-                    {
-                        m_CullingHandle.Complete();
-                    }
-
-                    using (new ProfilingScope(null, m_ProfilingSamplerFPUpload))
-                    {
-                        m_ZBinsBuffer.SetData(m_ZBins.Reinterpret<float4>(UnsafeUtility.SizeOf<uint>()));
-                        m_TileMasksBuffer.SetData(m_TileMasks.Reinterpret<float4>(UnsafeUtility.SizeOf<uint>()));
-                        cmd.SetGlobalConstantBuffer(m_ZBinsBuffer, "URP_ZBinBuffer", 0, UniversalRenderPipeline.maxZBinWords * 4);
-                        cmd.SetGlobalConstantBuffer(m_TileMasksBuffer, "urp_TileBuffer", 0, UniversalRenderPipeline.maxTileWords * 4);
-                    }
-
-                    cmd.SetGlobalVector("_FPParams0", math.float4(m_ZBinScale, m_ZBinOffset, m_LightCount, m_DirectionalLightCount));
-                    cmd.SetGlobalVector("_FPParams1", math.float4(renderingData.cameraData.pixelRect.size / m_ActualTileWidth, m_TileResolution.x, m_WordsPerTile));
-                    cmd.SetGlobalVector("_FPParams2", math.float4(m_BinCount, m_TileResolution.x * m_TileResolution.y, 0, 0));
-                }
-
                 SetupShaderLightConstants(cmd, ref renderingData);
 
                 bool lightCountCheck = (renderingData.cameraData.renderer.stripAdditionalLightOffVariants && renderingData.lightData.supportsAdditionalLights) || additionalLightsCount > 0;
                 CoreUtils.SetKeyword(cmd, ShaderKeywordStrings.AdditionalLightsVertex,
-                    lightCountCheck && additionalLightsPerVertex && !m_UseForwardPlus);
+                    lightCountCheck && additionalLightsPerVertex);
                 CoreUtils.SetKeyword(cmd, ShaderKeywordStrings.AdditionalLightsPixel,
-                    lightCountCheck && !additionalLightsPerVertex && !m_UseForwardPlus);
-                CoreUtils.SetKeyword(cmd, ShaderKeywordStrings.ForwardPlus,
-                    m_UseForwardPlus);
+                    lightCountCheck && !additionalLightsPerVertex);
 
                 bool isShadowMask = renderingData.lightData.supportsMixedLighting && m_MixedLightingSetup == MixedLightingSetup.ShadowMask;
                 bool isShadowMaskAlways = isShadowMask && QualitySettings.shadowmaskMode == ShadowmaskMode.Shadowmask;
