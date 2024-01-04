@@ -576,6 +576,7 @@ namespace UnityEngine.Rendering.Universal
 
             m_ColorAttachments[0] = colorAttachment;
             m_ColorAttachmentIds[0] = new RenderTargetIdentifier(colorAttachment.nameID, 0, CubemapFace.Unknown, -1);
+            //m_ColorAttachmentIds[0] = new RenderTargetIdentifier(colorAttachment.nameID, 0, CubemapFace.Unknown, -1);
             for (int i = 1; i < m_ColorAttachments.Length; ++i)
             {
                 m_ColorAttachments[i] = null;

@@ -90,60 +90,45 @@ namespace UnityEngine.Rendering.Universal.Internal
         /// <seealso cref="RenderingData"/>
         public bool Setup(ref RenderingData renderingData)
         {
-            if (!renderingData.shadowData.mainLightShadowsEnabled)
-                return false;
-
-            using var profScope = new ProfilingScope(null, m_ProfilingSetupSampler);
-            
-            if (!renderingData.shadowData.supportsMainLightShadows)
-                return SetupForEmptyRendering(ref renderingData);
-
             Clear();
             int shadowLightIndex = renderingData.lightData.mainLightIndex;
-            if (shadowLightIndex == -1)
-                return SetupForEmptyRendering(ref renderingData);
-
             VisibleLight shadowLight = renderingData.lightData.visibleLights[shadowLightIndex];
             Light light = shadowLight.light;
-            if (light.shadows == LightShadows.None)
-                return SetupForEmptyRendering(ref renderingData);
-
-            if (shadowLight.lightType != LightType.Directional)
-            {
-                Debug.LogWarning("Only directional lights are supported as main light.");
-            }
-
-            Bounds bounds;
-            if (!renderingData.cullResults.GetShadowCasterBounds(shadowLightIndex, out bounds))
-                return SetupForEmptyRendering(ref renderingData);
+    
+            renderingData.cullResults.GetShadowCasterBounds(shadowLightIndex, out Bounds bounds);
+          
 
             m_ShadowCasterCascadesCount = renderingData.shadowData.mainLightShadowCascadesCount;
 
-            int shadowResolution = ShadowUtils.GetMaxTileResolutionInAtlas(renderingData.shadowData.mainLightShadowmapWidth,
-                renderingData.shadowData.mainLightShadowmapHeight, m_ShadowCasterCascadesCount);
+            int shadowResolution = renderingData.shadowData.mainLightShadowmapWidth;
             renderTargetWidth = renderingData.shadowData.mainLightShadowmapWidth;
-            renderTargetHeight = (m_ShadowCasterCascadesCount == 2) ?
-                renderingData.shadowData.mainLightShadowmapHeight >> 1 :
-                renderingData.shadowData.mainLightShadowmapHeight;
+            renderTargetHeight = renderingData.shadowData.mainLightShadowmapHeight;
 
-            for (int cascadeIndex = 0; cascadeIndex < m_ShadowCasterCascadesCount; ++cascadeIndex)
-            {
-                bool success = ShadowUtils.ExtractDirectionalLightMatrix(ref renderingData.cullResults, ref renderingData.shadowData,
-                    shadowLightIndex, cascadeIndex, renderTargetWidth, renderTargetHeight, shadowResolution, light.shadowNearPlane,
-                    out m_CascadeSplitDistances[cascadeIndex], out m_CascadeSlices[cascadeIndex]);
-
-                if (!success)
-                    return SetupForEmptyRendering(ref renderingData);
-            }
-
-            ShadowUtils.ShadowRTReAllocateIfNeeded(ref m_MainLightShadowmapTexture, renderTargetWidth, renderTargetHeight, k_ShadowmapBufferBits, name: "_MainLightShadowmapTexture");
+            ref CullingResults cullingResults = ref renderingData.cullResults;
+            ref ShadowData shadowData = ref renderingData.shadowData;
+            ref ShadowSliceData shadowSliceData = ref m_CascadeSlices[0];
+            
+            cullingResults.ComputeDirectionalShadowMatricesAndCullingPrimitives(shadowLightIndex,
+                0, shadowData.mainLightShadowCascadesCount, shadowData.mainLightShadowCascadesSplit, 
+                shadowResolution, light.shadowNearPlane, out shadowSliceData.viewMatrix, out shadowSliceData.projectionMatrix,
+                out shadowSliceData.splitData);
+            
+            m_CascadeSplitDistances[0] = shadowSliceData.splitData.cullingSphere;
+            shadowSliceData.offsetX = 0;
+            shadowSliceData.offsetY = 0;
+            shadowSliceData.resolution = shadowResolution;
+            shadowSliceData.shadowTransform = ShadowUtils.GetShadowTransform(shadowSliceData.projectionMatrix, shadowSliceData.viewMatrix);
+            shadowSliceData.splitData.shadowCascadeBlendCullingFactor = 1.0f;
+            
+            RenderTextureDescriptor rtd = new RenderTextureDescriptor(renderTargetWidth, renderTargetHeight,
+                GraphicsFormat.None, GraphicsFormat.D16_UNorm);
+            rtd.shadowSamplingMode = ShadowSamplingMode.CompareDepths;
+            m_MainLightShadowmapTexture = RTHandles.Alloc(rtd, FilterMode.Point, TextureWrapMode.Clamp, isShadowMap: true, name: "_MainLightShadowmapTexture");
 
             m_MaxShadowDistanceSq = renderingData.cameraData.maxShadowDistance * renderingData.cameraData.maxShadowDistance;
             m_CascadeBorder = renderingData.shadowData.mainLightShadowCascadeBorder;
             m_CreateEmptyShadowmap = false;
             useNativeRenderPass = true;
-            ShadowUtils.ShadowRTReAllocateIfNeeded(ref m_EmptyLightShadowmapTexture, 1, 1, k_ShadowmapBufferBits, name: "_EmptyLightShadowmapTexture");
-
             return true;
         }
 
@@ -162,25 +147,54 @@ namespace UnityEngine.Rendering.Universal.Internal
         /// <inheritdoc />
         public override void Configure(CommandBuffer cmd, RenderTextureDescriptor cameraTextureDescriptor)
         {
-            if (m_CreateEmptyShadowmap)
+            var rt = new RenderTargetIdentifier(m_MainLightShadowmapTexture.nameID, 0, CubemapFace.Unknown, -1);
+            cmd.SetRenderTarget(rt, 
+                RenderBufferLoadAction.DontCare, 
+                RenderBufferStoreAction.Store);
+            /*if (m_CreateEmptyShadowmap)
                 ConfigureTarget(m_EmptyLightShadowmapTexture);
             else
-                ConfigureTarget(m_MainLightShadowmapTexture);
-            ConfigureClear(ClearFlag.All, Color.black);
+                ConfigureTarget(m_MainLightShadowmapTexture);*/
+            //ConfigureClear(ClearFlag.All, Color.black);
         }
 
         /// <inheritdoc/>
         public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
         {
-            if (m_CreateEmptyShadowmap)
+            ref CullingResults cullResults = ref renderingData.cullResults;
+            ref LightData lightData = ref renderingData.lightData;
+            VisibleLight shadowLight = lightData.visibleLights[0];
+            ref CommandBuffer cmd = ref renderingData.commandBuffer;
+            
+             using (new ProfilingScope(cmd, ProfilingSampler.Get(URPProfileId.MainLightShadow)))
             {
-                SetEmptyMainLightCascadeShadowmap(ref context, ref renderingData);
-                renderingData.commandBuffer.SetGlobalTexture(m_MainLightShadowmapID, m_EmptyLightShadowmapTexture.nameID);
+                var settings = new ShadowDrawingSettings(cullResults, 0, BatchCullingProjectionType.Orthographic);
+                settings.useRenderingLayerMaskTest = UniversalRenderPipeline.asset.useRenderingLayers;
+                // Need to start by setting the Camera position as that is not set for passes executed before normal rendering
+                cmd.SetGlobalVector(ShaderPropertyId.worldSpaceCameraPos, renderingData.cameraData.worldSpaceCameraPos);
 
-                return;
+                for (int cascadeIndex = 0; cascadeIndex < m_ShadowCasterCascadesCount; ++cascadeIndex)
+                {
+                    settings.splitData = m_CascadeSlices[cascadeIndex].splitData;
+
+                    Vector4 shadowBias = ShadowUtils.GetShadowBias(ref shadowLight, 0, ref renderingData.shadowData, m_CascadeSlices[cascadeIndex].projectionMatrix, m_CascadeSlices[cascadeIndex].resolution);
+                    ShadowUtils.SetupShadowCasterConstantBuffer(cmd, ref shadowLight, shadowBias);
+                    CoreUtils.SetKeyword(cmd, ShaderKeywordStrings.CastingPunctualLightShadow, false);
+                    ShadowUtils.RenderShadowSlice(cmd, ref context, ref m_CascadeSlices[cascadeIndex],
+                        ref settings, m_CascadeSlices[cascadeIndex].projectionMatrix, m_CascadeSlices[cascadeIndex].viewMatrix);
+                }
+
+                renderingData.shadowData.isKeywordSoftShadowsEnabled = shadowLight.light.shadows == LightShadows.Soft && renderingData.shadowData.supportsSoftShadows;
+                CoreUtils.SetKeyword(cmd, ShaderKeywordStrings.MainLightShadows, renderingData.shadowData.mainLightShadowCascadesCount == 1);
+                CoreUtils.SetKeyword(cmd, ShaderKeywordStrings.MainLightShadowCascades, renderingData.shadowData.mainLightShadowCascadesCount > 1);
+                CoreUtils.SetKeyword(cmd, ShaderKeywordStrings.SoftShadows, renderingData.shadowData.isKeywordSoftShadowsEnabled);
+
+                SetupMainLightShadowReceiverConstants(cmd, ref shadowLight, ref renderingData.shadowData);
             }
-
-            RenderMainLightCascadeShadowmap(ref context, ref renderingData);
+             
+            //RenderMainLightCascadeShadowmap(ref context, ref renderingData);
+            
+            
             renderingData.commandBuffer.SetGlobalTexture(m_MainLightShadowmapID, m_MainLightShadowmapTexture.nameID);
         }
 
