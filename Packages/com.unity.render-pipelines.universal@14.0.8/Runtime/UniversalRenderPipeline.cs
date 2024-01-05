@@ -543,7 +543,7 @@ namespace UnityEngine.Rendering.Universal
             renderer.Setup(context, ref renderingData);
             renderer.Execute(context, ref renderingData);
             CommandBufferPool.Release(cmd);
-            
+
             context.Submit();
             ScriptableRenderer.current = null;
         }

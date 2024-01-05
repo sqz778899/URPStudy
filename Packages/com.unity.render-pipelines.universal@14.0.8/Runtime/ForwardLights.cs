@@ -238,9 +238,14 @@ namespace UnityEngine.Rendering.Universal.Internal
             }
         }
 
-        void InitializeLightConstants(NativeArray<VisibleLight> lights, int lightIndex, out Vector4 lightPos, out Vector4 lightColor, out Vector4 lightAttenuation, out Vector4 lightSpotDir, out Vector4 lightOcclusionProbeChannel, out uint lightLayerMask, out bool isSubtractive)
+        void InitializeLightConstants(NativeArray<VisibleLight> lights, int lightIndex,
+            out Vector4 lightPos, out Vector4 lightColor, out Vector4 lightAttenuation,
+            out Vector4 lightSpotDir, out Vector4 lightOcclusionProbeChannel,
+            out uint lightLayerMask, out bool isSubtractive)
         {
-            UniversalRenderPipeline.InitializeLightConstants_Common(lights, lightIndex, out lightPos, out lightColor, out lightAttenuation, out lightSpotDir, out lightOcclusionProbeChannel);
+            UniversalRenderPipeline.InitializeLightConstants_Common(lights, lightIndex, out lightPos,
+                out lightColor, out lightAttenuation, out lightSpotDir, 
+                out lightOcclusionProbeChannel);
             lightLayerMask = 0;
             isSubtractive = false;
 

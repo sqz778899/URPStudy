@@ -544,7 +544,7 @@ namespace UnityEngine.Rendering.Universal
             
             // Assign camera targets (color and depth)
             ConfigureCameraTarget(m_ActiveCameraColorAttachment, m_ActiveCameraDepthAttachment);
-            EnqueuePass(m_MainLightShadowCasterPass);
+           
             
             RenderTextureDescriptor depthDescriptor = cameraTargetDescriptor;
             depthDescriptor.graphicsFormat = GraphicsFormat.None;
@@ -563,6 +563,8 @@ namespace UnityEngine.Rendering.Universal
             renderOpaqueForwardPass.ConfigureColorStoreAction(RenderBufferStoreAction.Store);
             renderOpaqueForwardPass.ConfigureDepthStoreAction(RenderBufferStoreAction.Store);
             
+            
+            EnqueuePass(m_MainLightShadowCasterPass);
             EnqueuePass(renderOpaqueForwardPass);
             EnqueuePass(m_DrawSkyboxPass);
             m_CopyDepthPass.Setup(m_ActiveCameraDepthAttachment, m_DepthTexture);
