@@ -121,6 +121,7 @@ namespace UnityEngine.Rendering.Universal.Internal
             RenderTextureDescriptor rtd = new RenderTextureDescriptor(renderTargetWidth, renderTargetHeight,
                 GraphicsFormat.None, GraphicsFormat.D16_UNorm);
             rtd.shadowSamplingMode = ShadowSamplingMode.CompareDepths;
+            m_MainLightShadowmapTexture?.Release();
             m_MainLightShadowmapTexture = RTHandles.Alloc(rtd, FilterMode.Point, TextureWrapMode.Clamp, isShadowMap: true, name: "_MainLightShadowmapTexture");
 
             m_MaxShadowDistanceSq = renderingData.cameraData.maxShadowDistance * renderingData.cameraData.maxShadowDistance;
@@ -145,11 +146,18 @@ namespace UnityEngine.Rendering.Universal.Internal
         /// <inheritdoc />
         public override void Configure(CommandBuffer cmd, RenderTextureDescriptor cameraTextureDescriptor)
         {
+            /*var rt = new RenderTargetIdentifier(m_MainLightShadowmapTexture.nameID,
+                0, CubemapFace.Unknown, -1);
+            cmd.SetRenderTarget(rt, 
+                RenderBufferLoadAction.DontCare, 
+                RenderBufferStoreAction.Store);
+           
+            /*ConfigureClear(ClearFlag.All, Color.black);#1#
             if (m_CreateEmptyShadowmap)
                 ConfigureTarget(m_EmptyLightShadowmapTexture);
             else
                 ConfigureTarget(m_MainLightShadowmapTexture);
-            ConfigureClear(ClearFlag.All, Color.black);
+            ConfigureClear(ClearFlag.All, Color.black);*/
         }
 
         /// <inheritdoc/>
@@ -187,11 +195,18 @@ namespace UnityEngine.Rendering.Universal.Internal
             cmd.SetViewProjectionMatrices(m_CascadeSlices[0].viewMatrix, m_CascadeSlices[0].projectionMatrix);
             context.ExecuteCommandBuffer(cmd);
             cmd.Clear();
+            
+            cmd.SetRenderTarget(m_MainLightShadowmapTexture.rt);
+            cmd.ClearRenderTarget(true, true, Color.black); // 清空 RenderTexture
+            context.ExecuteCommandBuffer(cmd);
+            cmd.Clear();
+            
             context.DrawShadows(ref settings);
             cmd.DisableScissorRect();
             context.ExecuteCommandBuffer(cmd);
             cmd.Clear();
             cmd.SetGlobalDepthBias(0.0f, 0.0f); // Restore previous depth bias values
+            
 
             SetupMainLightShadowReceiverConstants(cmd, ref shadowLight, ref renderingData.shadowData);
             
