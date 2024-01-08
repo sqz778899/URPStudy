@@ -1799,7 +1799,7 @@ namespace UnityEngine.Rendering.Universal
                 int value = (int)m_ShadowCascades;
                 if (value == 2)
                 {
-                    m_ShadowCascadeCount = 4;
+                    m_ShadowCascadeCount = value;
                 }
                 else
                 {

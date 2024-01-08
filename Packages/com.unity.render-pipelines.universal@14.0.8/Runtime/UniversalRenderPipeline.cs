@@ -869,7 +869,8 @@ namespace UnityEngine.Rendering.Universal
             {
                 mCameraData.imageScalingMode = ImageScalingMode.Downscaling;
             }
-            else if ((mCameraData.renderScale < 1.0f) || (!isScenePreviewOrReflectionCamera && (mCameraData.upscalingFilter == ImageUpscalingFilter.FSR)))
+            else if ((mCameraData.renderScale < 1.0f) || (!isScenePreviewOrReflectionCamera && 
+                                                          (mCameraData.upscalingFilter == ImageUpscalingFilter.FSR)))
             {
                 // When FSR is enabled, we still consider 100% render scale an upscaling operation. (This behavior is only intended for game view cameras)
                 // This allows us to run the FSR shader passes all the time since they improve visual quality even at 100% scale.
