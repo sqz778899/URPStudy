@@ -57,7 +57,7 @@ namespace UnityEngine.Rendering.Universal.Internal
         /// </summary>
         /// <param name="baseDescriptor"></param>
         /// <param name="colorHandle"></param>
-        public void Setup(RenderTextureDescriptor baseDescriptor, RTHandle colorHandle)
+        public void Setup(RTHandle colorHandle)
         {
             m_Source = colorHandle;
         }

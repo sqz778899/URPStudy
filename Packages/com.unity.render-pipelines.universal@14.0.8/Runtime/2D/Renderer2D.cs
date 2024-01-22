@@ -391,7 +391,7 @@ namespace UnityEngine.Rendering.Universal
             }
             else if (lastCameraInStack && finalTargetHandle != k_CameraTarget)
             {
-                m_FinalBlitPass.Setup(cameraTargetDescriptor, finalTargetHandle);
+                m_FinalBlitPass.Setup(finalTargetHandle);
                 EnqueuePass(m_FinalBlitPass);
             }
 

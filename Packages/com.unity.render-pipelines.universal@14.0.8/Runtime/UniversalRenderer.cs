@@ -520,7 +520,7 @@ namespace UnityEngine.Rendering.Universal
             EnqueuePass(m_RenderTransparentForwardPass);
             EnqueuePass(m_OnRenderObjectCallbackPass);
             SetupFinalPassDebug(ref cameraData);
-            m_FinalBlitPass.Setup(cameraTargetDescriptor, m_ActiveCameraColorAttachment);
+            m_FinalBlitPass.Setup(m_ActiveCameraColorAttachment);
             EnqueuePass(m_FinalBlitPass);
         }
 

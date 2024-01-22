@@ -166,8 +166,11 @@ namespace UnityEngine.Rendering.Universal.Internal
             ref CullingResults cullResults = ref renderingData.cullResults;
             ref LightData lightData = ref renderingData.lightData;
             CommandBuffer cmd = renderingData.commandBuffer;
+            
             int shadowLightIndex = lightData.mainLightIndex;
             VisibleLight shadowLight = lightData.visibleLights[shadowLightIndex];
+            if (shadowLight.light.shadows == LightShadows.None)
+                return;
             
             ShadowDrawingSettings settings = new ShadowDrawingSettings(cullResults,
                 shadowLightIndex, BatchCullingProjectionType.Orthographic);
